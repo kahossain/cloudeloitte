@@ -1,5 +1,15 @@
 'use strict';
 
+// bring in firestore
+const Firestore = require("@google-cloud/firestore");
+
+// initialize Firestore and set project id from env var
+const firestore = new Firestore(
+    {
+        projectId: process.env.GOOGLE_CLOUD_PROJECT
+    }
+);
+
 // express is a nodejs web server
 // https://www.npmjs.com/package/express
 const express = require('express');
@@ -23,6 +33,27 @@ const mockEvents = {
     ]
 };
 
+function getEvents(req, res) {
+    const returnObj = { events: []};
+        firestore.collection("Events").get()
+            .then((snapshot) => {
+                    if (!snapshot.empty) {
+                        snapshot.docs.forEach(doc => {
+                        const eventObj = doc.data();
+                        //get internal firestore id and assign to object
+                        eventObj.id = doc.id;
+                        //add object to array
+                        console.log(returnObj);
+                        returnObj.events.push(eventObj);
+                        }); 
+                }
+            res.json(returnObj);
+        })
+        .catch((err) => {
+            console.error('Error getting events', err);
+            res.json(returnObj);
+        });
+};
 
 
 
@@ -40,7 +71,7 @@ app.get('/version', (req, res) => {
 // mock events endpoint. this would be replaced by a call to a datastore
 // if you went on to develop this as a real application.
 app.get('/events', (req, res) => {
-    res.json(mockEvents);
+    getEvents(req, res);
 });
 
 // Adds an event - in a real solution, this would insert into a cloud datastore.
@@ -50,13 +81,12 @@ app.post('/event', (req, res) => {
     // create a new object from the json data and add an id
     const ev = { 
         title: req.body.title, 
-        description: req.body.description,
-        id : mockEvents.events.length + 1
+        description: req.body.description
      }
-    // add to the mock array
-    mockEvents.events.push(ev);
-    // return the complete array
-    res.json(mockEvents);
+    // this will create the Events collection if it does not exist
+    firestore.collection("Events").add(ev).then(ret => {
+        getEvents(req, res);
+    });
 });
 
 app.use((err, req, res, next) => {
